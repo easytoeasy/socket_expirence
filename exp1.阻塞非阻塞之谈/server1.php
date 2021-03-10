@@ -36,8 +36,40 @@ include __DIR__ . '/../init.php';
  */
 
 
- if (socket_create(AF_INET, SOCK_STREAM, SOL_TCP) === false) {
+ if (($fd = socket_create(AF_INET, SOCK_STREAM, SOL_TCP)) === false) {
      getErrmsg();
+     exit(3);
  }
+
+ if (socket_bind($fd, HOST, PORT) === false) {
+     getErrmsg($fd);
+     exit(3);
+ }
+
+ if (socket_listen($fd, BACKLOG) === false) {
+    getErrmsg($fd);
+    exit(3);
+ }
+
+ while(true) {
+     $cfd = socket_accept($fd);
+     $retval = socket_read($cfd, 1024);
+     var_dump($retval);
+     if ($retval == '' || $retval === false) {
+         getErrmsg($cfd);
+         free($cfd);
+         break;
+     }
+     $buf = 'hello';
+     $retval = socket_write($cfd, $buf, strlen($buf));
+     if ($retval === false) {
+        getErrmsg($cfd);
+        free($cfd);
+        break;
+     }
+     var_dump($retval);
+ }
+
+ free($fd);
 
  
