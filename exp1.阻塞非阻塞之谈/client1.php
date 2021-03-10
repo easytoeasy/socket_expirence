@@ -3,6 +3,13 @@
 include __DIR__ . '/../init.php';
 
 
+/* UDP
+if (($fd = socket_create(AF_INET, SOCK_DGRAM, SOL_UDP)) === false) {
+    getErrmsg();
+    exit(3);
+}*/
+
+// TCP
 if (($fd = socket_create(AF_INET, SOCK_STREAM, SOL_TCP)) === false) {
     getErrmsg();
     exit(3);
