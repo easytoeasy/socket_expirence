@@ -36,40 +36,71 @@ include __DIR__ . '/../init.php';
  */
 
 
- if (($fd = socket_create(AF_INET, SOCK_STREAM, SOL_TCP)) === false) {
-     getErrmsg();
-     exit(3);
- }
+if (($fd = socket_create(AF_INET, SOCK_STREAM, SOL_TCP)) === false) {
+    getErrmsg();
+    exit(3);
+}
 
- if (socket_bind($fd, HOST, PORT) === false) {
-     getErrmsg($fd);
-     exit(3);
- }
+// 设置为非阻塞socket
+socket_set_nonblock($fd);
+socket_set_option($fd, SOL_SOCKET, SO_REUSEADDR, 1);
+socket_set_option($fd, SOL_SOCKET, SO_REUSEPORT, 1);
 
- if (socket_listen($fd, BACKLOG) === false) {
+if (socket_bind($fd, HOST, PORT) === false) {
     getErrmsg($fd);
     exit(3);
- }
+}
 
- while(true) {
-     $cfd = socket_accept($fd);
-     $retval = socket_read($cfd, 1024);
-     var_dump($retval);
-     if ($retval == '' || $retval === false) {
-         getErrmsg($cfd);
-         free($cfd);
-         break;
-     }
-     $buf = 'hello';
-     $retval = socket_write($cfd, $buf, strlen($buf));
-     if ($retval === false) {
+if (socket_listen($fd, BACKLOG) === false) {
+    getErrmsg($fd);
+    exit(3);
+}
+
+$client = [];
+while (true) {
+    /* 在阻塞Socket下：accept会一直等待客户端的连接。如果之前已经连接过的客户端而又没有释放连接，
+     * 在后期也会接收不到消息。所以需要引入IO多路复用`select`，在接收到事件通知之后就从 
+     * 内核态返回给用户态。只是`select`不会告知你是哪个fd有事件通知，因此需要循环一遍。
+     * 
+     * 在非阻塞Socket下：accept会立即返回 */
+    if ($cfd = socket_accept($fd)) {
+        $client[$cfd] = $cfd;
+    }
+    // echo "do't wait accept... \n";
+    // 非阻塞模式下不知道哪个cfd有数据，所以循环处理所有的fd就会很低效。
+    // 因此需要select
+    foreach ($client as $c) {
+        // 因为read在关闭连接时接收到的消息是空的，但是非阻塞模式下没有发送消息时接收到的是什么呢？
+        // 接收到的是个空字符串
+        $data = socket_read($c, 1024);
+        if ($data) {
+            var_dump($data);
+            socket_write($c, 'i get!');
+        } else {
+            // 关闭和非阻塞模式下接收到的都是空的字符串，因此无法依据空字符串关闭连接。
+            // unset($client[$c]);
+            // socket_close($c);
+        }
+    }
+
+    /* 阻塞模式下的写法
+    $cfd = socket_accept($fd);
+    $retval = socket_read($cfd, 1024);
+    var_dump($retval);
+    if ($retval == '' || $retval === false) {
         getErrmsg($cfd);
         free($cfd);
         break;
-     }
-     var_dump($retval);
- }
+    }
+    $buf = 'hello';
+    $retval = socket_write($cfd, $buf, strlen($buf));
+    if ($retval === false) {
+        getErrmsg($cfd);
+        free($cfd);
+        break;
+    }
+    var_dump($retval);
+    */
+}
 
- free($fd);
-
- 
+free($fd);
